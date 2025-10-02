@@ -108,21 +108,6 @@
         .back-button:hover {
             background: linear-gradient(135deg, #ff6a3d, #e74c7c);
         }
-
-        #debug {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.8);
-            color: lime;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            max-width: 90%;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-        }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -165,54 +150,35 @@
         </div>
     </div>
 
-    <!-- Debug panel -->
-    <div id="debug"></div>
-
     <script>
-        const debugPanel = document.getElementById('debug');
-        
-        function log(message) {
-            console.log(message);
-            debugPanel.innerHTML += message + '<br>';
-            debugPanel.scrollTop = debugPanel.scrollHeight;
-        }
-
-        log('🚀 Страница загружена');
-
         const tg = window.Telegram.WebApp;
-        log('📱 Telegram WebApp объект: ' + (tg ? 'OK' : 'ОШИБКА'));
-        
         tg.ready();
-        log('✅ WebApp.ready() вызван');
-
         tg.expand();
-        log('📏 WebApp расширен');
 
-        // Показываем информацию о пользователе
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            log('👤 Пользователь: ' + tg.initDataUnsafe.user.username + ' (ID: ' + tg.initDataUnsafe.user.id + ')');
-        } else {
-            log('⚠️ Данные пользователя недоступны');
-        }
+        // Читаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const GROUP_ID_DID = urlParams.get("did");
+        const GROUP_ID_PH = urlParams.get("ph");
+        const GROUP_ID_BLACK = urlParams.get("black");
+        const GROUP_ID_GAZIK = urlParams.get("gazik");
+        const GROUP_ID_VOISO = urlParams.get("voiso");
+        const BOT_TOKEN = urlParams.get("token");
 
         let selectedLine = "";
 
         function showLineButtons() {
-            log('🔘 Показаны кнопки линий');
             document.getElementById("complaintButton").style.display = "none";
             document.getElementById("lineButtons").style.display = "flex";
         }
 
         function showForm(lineType) {
             selectedLine = lineType;
-            log('📝 Выбрана линия: ' + lineType);
             document.getElementById("lineButtons").style.display = "none";
             document.getElementById("formContainer").style.display = "flex";
         }
 
         // Кнопка "Назад"
         document.getElementById('backButton').addEventListener('click', () => {
-            log('⬅️ Нажата кнопка "Назад"');
             document.getElementById("formContainer").style.display = "none";
             document.getElementById("lineButtons").style.display = "flex";
 
@@ -224,59 +190,67 @@
         });
 
         // Кнопка "Отправить"
-        document.getElementById('submitButton').addEventListener('click', () => {
-            log('📤 Нажата кнопка "Отправить"');
-            
+        document.getElementById('submitButton').addEventListener('click', async () => {
             const phoneNumber = document.getElementById('phoneNumber').value;
             const callTime = document.getElementById('callTime').value;
             const comment = document.getElementById('comment').value;
             const secondLine = document.getElementById('secondLine').value;
 
-            log('📋 Телефон: ' + phoneNumber);
-            log('⏰ Время: ' + callTime);
-            log('📲 Дозвон: ' + secondLine);
-
             if (!phoneNumber || !callTime || !secondLine) {
-                log('❌ Не все поля заполнены!');
-                alert("Пожалуйста, заполните все обязательные поля.");
+                tg.showAlert("Пожалуйста, заполните все обязательные поля.");
                 return;
             }
 
-            // Отправляем данные через Telegram WebApp API
-            const data = {
-                line: selectedLine,
-                phone: phoneNumber,
-                time: callTime,
-                comment: comment,
-                secondLine: secondLine
-            };
+            const message = `🆕 Новая заявка от @${tg.initDataUnsafe.user?.username || "Неизвестно"} (ID: ${tg.initDataUnsafe.user?.id || "Неизвестно"}):
+📞 Линия: ${selectedLine}
+☎️ Номер телефона: ${phoneNumber}
+⏰ Время звонка: ${callTime}
+📲 Дозвон с другой линии: ${secondLine}
+💬 Комментарий: ${comment || 'Не указан'}`;
 
-            const jsonData = JSON.stringify(data);
-            log('📦 Данные для отправки: ' + jsonData);
+            let groupId;
+            switch (selectedLine) {
+                case "DID": groupId = GROUP_ID_DID; break;
+                case "PH": groupId = GROUP_ID_PH; break;
+                case "Black": groupId = GROUP_ID_BLACK; break;
+                case "Gazik": groupId = GROUP_ID_GAZIK; break;
+                case "Voiso": groupId = GROUP_ID_VOISO; break;
+            }
 
             try {
-                // Проверяем доступность sendData
-                if (typeof tg.sendData === 'function') {
-                    log('✅ Функция sendData доступна');
-                    tg.sendData(jsonData);
-                    log('✅ sendData() вызван успешно');
-                    
-                    // Закрываем WebApp после отправки
-                    setTimeout(() => {
-                        log('🔒 Закрываем WebApp...');
-                        tg.close();
-                    }, 500);
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: groupId,
+                        text: message,
+                        reply_markup: {
+                            inline_keyboard: [[
+                                { text: "✍️ Ответить", callback_data: `answer_${tg.initDataUnsafe.user?.id}` }
+                            ]]
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    tg.showAlert("✅ Заявка успешно отправлена!");
+                    // очищаем форму
+                    document.getElementById('phoneNumber').value = "";
+                    document.getElementById('callTime').value = "";
+                    document.getElementById('comment').value = "";
+                    document.getElementById('secondLine').value = "";
+                    // возвращаем на выбор линии
+                    document.getElementById("formContainer").style.display = "none";
+                    document.getElementById("lineButtons").style.display = "flex";
                 } else {
-                    log('❌ Функция sendData недоступна!');
-                    alert('Ошибка: функция sendData недоступна. Откройте форму через inline-кнопку.');
+                    const errorData = await response.json();
+                    tg.showAlert("❌ Ошибка отправки: " + errorData.description);
                 }
             } catch (error) {
-                log('❌ Ошибка при отправке: ' + error.message);
-                alert('Ошибка при отправке: ' + error.message);
+                console.error("Ошибка отправки:", error);
+                tg.showAlert("❌ Не удалось отправить заявку.");
             }
         });
-
-        log('✅ Все обработчики установлены');
     </script>
 </body>
 </html>
