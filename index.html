@@ -108,6 +108,21 @@
         .back-button:hover {
             background: linear-gradient(135deg, #ff6a3d, #e74c7c);
         }
+
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: lime;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 90%;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -150,25 +165,54 @@
         </div>
     </div>
 
+    <!-- Debug panel -->
+    <div id="debug"></div>
+
     <script>
+        const debugPanel = document.getElementById('debug');
+        
+        function log(message) {
+            console.log(message);
+            debugPanel.innerHTML += message + '<br>';
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+
+        log('🚀 Страница загружена');
+
         const tg = window.Telegram.WebApp;
+        log('📱 Telegram WebApp объект: ' + (tg ? 'OK' : 'ОШИБКА'));
+        
         tg.ready();
+        log('✅ WebApp.ready() вызван');
+
+        tg.expand();
+        log('📏 WebApp расширен');
+
+        // Показываем информацию о пользователе
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            log('👤 Пользователь: ' + tg.initDataUnsafe.user.username + ' (ID: ' + tg.initDataUnsafe.user.id + ')');
+        } else {
+            log('⚠️ Данные пользователя недоступны');
+        }
 
         let selectedLine = "";
 
         function showLineButtons() {
+            log('🔘 Показаны кнопки линий');
             document.getElementById("complaintButton").style.display = "none";
             document.getElementById("lineButtons").style.display = "flex";
         }
 
         function showForm(lineType) {
             selectedLine = lineType;
+            log('📝 Выбрана линия: ' + lineType);
             document.getElementById("lineButtons").style.display = "none";
             document.getElementById("formContainer").style.display = "flex";
         }
 
         // Кнопка "Назад"
         document.getElementById('backButton').addEventListener('click', () => {
+            log('⬅️ Нажата кнопка "Назад"');
             document.getElementById("formContainer").style.display = "none";
             document.getElementById("lineButtons").style.display = "flex";
 
@@ -181,12 +225,19 @@
 
         // Кнопка "Отправить"
         document.getElementById('submitButton').addEventListener('click', () => {
+            log('📤 Нажата кнопка "Отправить"');
+            
             const phoneNumber = document.getElementById('phoneNumber').value;
             const callTime = document.getElementById('callTime').value;
             const comment = document.getElementById('comment').value;
             const secondLine = document.getElementById('secondLine').value;
 
+            log('📋 Телефон: ' + phoneNumber);
+            log('⏰ Время: ' + callTime);
+            log('📲 Дозвон: ' + secondLine);
+
             if (!phoneNumber || !callTime || !secondLine) {
+                log('❌ Не все поля заполнены!');
                 alert("Пожалуйста, заполните все обязательные поля.");
                 return;
             }
@@ -200,12 +251,32 @@
                 secondLine: secondLine
             };
 
-            // Отправляем данные боту
-            tg.sendData(JSON.stringify(data));
-            
-            // Закрываем WebApp после отправки
-            tg.close();
+            const jsonData = JSON.stringify(data);
+            log('📦 Данные для отправки: ' + jsonData);
+
+            try {
+                // Проверяем доступность sendData
+                if (typeof tg.sendData === 'function') {
+                    log('✅ Функция sendData доступна');
+                    tg.sendData(jsonData);
+                    log('✅ sendData() вызван успешно');
+                    
+                    // Закрываем WebApp после отправки
+                    setTimeout(() => {
+                        log('🔒 Закрываем WebApp...');
+                        tg.close();
+                    }, 500);
+                } else {
+                    log('❌ Функция sendData недоступна!');
+                    alert('Ошибка: функция sendData недоступна. Откройте форму через inline-кнопку.');
+                }
+            } catch (error) {
+                log('❌ Ошибка при отправке: ' + error.message);
+                alert('Ошибка при отправке: ' + error.message);
+            }
         });
+
+        log('✅ Все обработчики установлены');
     </script>
 </body>
 </html>
